@@ -206,7 +206,7 @@ pub export fn __wrap_mmap(
                     client_conf.len,
                 });
             }
-            if (prot.READ) {
+            if (!prot.READ) {
                 std.debug.panic("__wrap_mmap: {s}: unexpected prot: {}", .{
                     client_config_path,
                     prot,
@@ -229,12 +229,12 @@ pub export fn __wrap_mmap(
             break :b .{ @ptrCast(@constCast(client_conf.ptr)), "faked" };
         } else {
             break :b .{
-                @ptrCast(@constCast(&std.os.linux.mmap(addr, length, prot, flags, fd, offset))),
+                @ptrFromInt(std.os.linux.mmap(addr, length, prot, flags, fd, offset)),
                 "real",
             };
         }
     };
-    log.debug("mmap({*}, {}, {any}, {f}, {}, {}) -> {*} ({s})", .{
+    log.debug("mmap({*}, {}, {}, {f}, {}, {}) -> {*} ({s})", .{
         addr,
         length,
         prot,
