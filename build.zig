@@ -278,25 +278,24 @@ pub fn build(b: *std.Build) void {
                         .flags = flags,
                     });
                 }
-                // https://github.com/allyourcodebase/pipewire/issues/10
-                // if (target.result.cpu.has(.x86, .sse4_1)) {
-                //     audioconvert.root_module.addCMacro("HAVE_SSE41", "1");
-                //     audioconvert.root_module.addCSourceFiles(.{
-                //         .root = upstream.path("spa/plugins/audioconvert"),
-                //         .files = &.{
-                //             "fmt-ops-sse41.c",
-                //         },
-                //         .flags = flags,
-                //     });
-                // }
-                if (target.result.cpu.has(.x86, .avx) and target.result.cpu.has(.x86, .fma)) {
+                if (target.result.cpu.has(.x86, .sse4_1)) {
+                    audioconvert.root_module.addCMacro("HAVE_SSE41", "1");
+                    audioconvert.root_module.addCSourceFiles(.{
+                        .root = upstream.path("spa/plugins/audioconvert"),
+                        .files = &.{
+                            "fmt-ops-sse41.c",
+                        },
+                        .flags = flags,
+                    });
+                }
+                if (target.result.cpu.has(.x86, .avx2) and target.result.cpu.has(.x86, .fma)) {
                     // Upstream build system also only defines either if both are present
-                    audioconvert.root_module.addCMacro("HAVE_AVX", "1");
+                    audioconvert.root_module.addCMacro("HAVE_AVX2", "1");
                     audioconvert.root_module.addCMacro("HAVE_FMA", "1");
                     audioconvert.root_module.addCSourceFiles(.{
                         .root = upstream.path("spa/plugins/audioconvert"),
                         .files = &.{
-                            "resample-native-avx.c",
+                            "resample-native-avx2.c",
                         },
                         .flags = flags,
                     });
