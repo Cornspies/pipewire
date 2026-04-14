@@ -633,7 +633,6 @@ pub const PipewireModule = struct {
                 .target = ctx.target,
                 .optimize = ctx.optimize,
                 .link_libc = true,
-                .sanitize_c = .off, // https://github.com/allyourcodebase/pipewire/issues/3
             }),
         });
         lib.root_module.addCSourceFiles(.{

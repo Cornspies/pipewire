@@ -7,6 +7,7 @@ const std = @import("std");
 const log = std.log.scoped(.wrap_dlfcn);
 const fmtFlags = @import("format.zig").fmtFlags;
 const dlfcn = @import("dlfcn.zig");
+const c = @cImport(@cInclude("sys/stat.h"));
 
 /// The path pipewire looks for client config at.
 const client_config_path = "pipewire-0.3/confdata/client.conf";
@@ -17,56 +18,18 @@ const client_conf: [:0]const u8 = @embedFile("client.conf");
 /// The current client config file descriptor, or -1 if not open.
 var maybe_client_config_fd: ?std.c.fd_t = null;
 
-extern "c" fn fstatat(dirfd: i32, path: [*:0]const u8, buf: [*]const u8, flag: u32) c_int;
-extern "c" fn fstat(dirfd: i32, buf: [*]const u8) c_int;
-extern "c" fn stat(noalias path: [*:0]const u8, noalias buf: [*]const u8) c_int;
-
-// The `stat` definition used by the Linux kernel.
-pub const Stat = extern struct {
-    dev: u64,
-    ino: u64,
-    nlink: u64,
-
-    mode: u32,
-    uid: std.os.linux.uid_t,
-    gid: std.os.linux.gid_t,
-    __pad0: u32,
-    rdev: u64,
-    size: i64,
-    blksize: i64,
-    blocks: i64,
-
-    atim: std.os.linux.timespec,
-    mtim: std.os.linux.timespec,
-    ctim: std.os.linux.timespec,
-    __unused: [3]i64,
-
-    pub fn atime(self: @This()) std.os.linux.timespec {
-        return self.atim;
-    }
-
-    pub fn mtime(self: @This()) std.os.linux.timespec {
-        return self.mtim;
-    }
-
-    pub fn ctime(self: @This()) std.os.linux.timespec {
-        return self.ctim;
-    }
-};
-
 /// If we're stating a shared library from out table, fake the result.
 pub export fn __wrap_stat(
     noalias pathname_c: [*:0]const u8,
-    noalias statbuf: *Stat,
+    noalias statbuf: *c.struct_stat,
 ) callconv(.c) c_int {
     const pathname = std.mem.span(pathname_c);
     const result, const strategy = b: {
         if (dlfcn.libs.get(pathname) != null) {
-            statbuf.* = std.mem.zeroInit(Stat, .{ .mode = std.c.S.IFREG });
+            statbuf.* = std.mem.zeroInit(c.struct_stat, .{ .st_mode = std.c.S.IFREG });
             break :b .{ 0, "faked" };
         } else {
-            break :b .{ stat(pathname_c, @ptrCast(statbuf)), "real" };
-
+            break :b .{ c.stat(pathname_c, @ptrCast(statbuf)), "real" };
         }
     };
     log.debug("stat(\"{f}\", {*}) -> {} (statbuf.* == {f}) ({s})", .{
@@ -154,27 +117,27 @@ pub export fn __wrap_close(fd: std.c.fd_t) callconv(.c) c_int {
 }
 
 /// If we're fstating a config file, fake the output and result.
-pub export fn __wrap_fstat(fd: std.c.fd_t, buf: *Stat) callconv(.c) c_int {
+pub export fn __wrap_fstat(fd: std.c.fd_t, buf: *c.struct_stat) callconv(.c) c_int {
     const result, const strategy = b: {
         if (fd == maybe_client_config_fd) {
-            buf.* = std.mem.zeroInit(Stat, .{
-                .dev = 0,
-                .ino = 0,
-                .mode = std.c.S.IFREG,
-                .nlink = 0,
-                .uid = std.math.maxInt(std.os.linux.uid_t),
-                .gid = std.math.maxInt(std.os.linux.gid_t),
-                .rdev = 0,
-                .size = client_conf.len,
-                .blksize = 0,
-                .blocks = 0,
-                .atim = std.mem.zeroes(std.os.linux.timespec),
-                .mtim = std.mem.zeroes(std.os.linux.timespec),
-                .ctim = std.mem.zeroes(std.os.linux.timespec),
+            buf.* = std.mem.zeroInit(c.struct_stat, .{
+                .st_dev = 0,
+                .st_ino = 0,
+                .st_mode = std.c.S.IFREG,
+                .st_nlink = 0,
+                .st_uid = std.math.maxInt(std.os.linux.uid_t),
+                .st_gid = std.math.maxInt(std.os.linux.gid_t),
+                .st_rdev = 0,
+                .st_size = client_conf.len,
+                .st_blksize = 0,
+                .st_blocks = 0,
+                .st_atim = std.mem.zeroes(c.struct_timespec),
+                .st_mtim = std.mem.zeroes(c.struct_timespec),
+                .st_ctim = std.mem.zeroes(c.struct_timespec),
             });
             break :b .{ 0, "real" };
         } else {
-            break :b .{ fstat(fd, @ptrCast(buf)), "real" };
+            break :b .{ c.fstat(fd, @ptrCast(buf)), "real" };
         }
     };
     log.debug("fstat({}, {*}) -> {} (buf.* = {any}) ({s})", .{ fd, buf, result, buf.*, strategy });
