@@ -7,14 +7,15 @@ const options = @import("options");
 const assert = std.debug.assert;
 
 pub fn main(init: std.process.Init) !void {
-    const allocator = init.arena.allocator();
+    const gpa = init.arena.allocator();
     const io = init.io;
 
-    const args = try init.minimal.args.toSlice(allocator);
-
-    const input_path = args[1];
-    const output_path = args[2];
-    assert(args.len == 3);
+    var args = try init.minimal.args.iterateAllocator(gpa);
+    defer args.deinit();
+    _ = args.skip();
+    const input_path = args.next().?;
+    const output_path = args.next().?;
+    assert(args.next() == null);
 
     const cwd = std.Io.Dir.cwd();
 

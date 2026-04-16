@@ -25,6 +25,8 @@ Note that the video feed will be fairly low resolution as the example doesn't ha
 
 Only the pipewire plugins/modules required for the provided examples are currently built. To use other parts of the pipewire API, you may need to add more symbols to the `libs` table in [src/wrap/dlfcn.zig](src/wrap/dlfcn.zig) and regenerate `c.zig` if additional pipewire headers are required. Contributions welcome!
 
+You can also use `-Duse_translate_c` to automatically translate the new Pipewire headers, see [this issue](https://github.com/allyourcodebase/pipewire/issues/6) for why this isn't yet the default.
+
 ## Usage
 
 First, add pipewire to your `build.zig.zon`:

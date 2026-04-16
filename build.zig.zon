@@ -3,8 +3,7 @@
     .fingerprint = 0x1c93541a4325abb4,
     .version = "1.6.3",
     .api_version = "0.3",
-
-    .minimum_zig_version = "0.16.0-dev.3061+9b1eaad13",
+    .minimum_zig_version = "0.16.0",
 
     .dependencies = .{
         .valgrind_h = .{
@@ -21,6 +20,10 @@
         //     .hash = "zin-0.0.0-W7QDx7GEAwCKJgCXWgxmPL1hFtLwOVanaKRTnYBCFTsf",
         //     .lazy = true,
         // },
+        .translate_c = .{
+            .url = "git+https://codeberg.org/ziglang/translate-c#46b5609b5ac4c0a896217d1d984f3ae50e4810b5",
+            .hash = "translate_c-0.0.0-Q_BUWpf0BgAwrh5AM-acJcslN_YPEhcoCVKbbNjwuUTJ",
+        },
     },
     .paths = .{
         "LICENSE",

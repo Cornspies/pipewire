@@ -1,12 +1,17 @@
 const std = @import("std");
 const build_zon = @import("build.zig.zon");
 
+const Translator = @import("translate_c").Translator;
+
 pub fn build(b: *std.Build) void {
     // Get the library and example build options
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const host_target = b.resolveTargetQuery(.{});
     const host_optimize = .Debug;
+
+    // https://github.com/allyourcodebase/pipewire/issues/6
+    const use_translate_c = b.option(bool, "use_translate_c", "Use translate C.") orelse false;
 
     const rtprio_client = b.option(u8, "rtprio_client", "PipeWire clients realtime priority") orelse 83;
     if (rtprio_client < 11 or rtprio_client > 99) @panic("invalid rtprio_client");
@@ -356,6 +361,7 @@ pub fn build(b: *std.Build) void {
                     dump_coeffs.addArgs(&.{ "-t", tuple });
                 }
                 const resample_native_precomp_h = dump_coeffs.captureStdOut(.{});
+                _ = dump_coeffs.captureStdErr(.{}); // Ignore stderr
                 const write_coeffs = b.addWriteFiles();
                 _ = write_coeffs.addCopyFile(
                     resample_native_precomp_h,
@@ -449,14 +455,26 @@ pub fn build(b: *std.Build) void {
         b.installArtifact(libpipewire);
     }
 
-    // Create the translated C module for importing pipewire headers into Zig. See the source file
-    // for why we're caching this rather than using translate c.
-    const c = b.createModule(.{
-        .root_source_file = b.path("src/lib/c.zig"),
-        .target = target,
-        .optimize = optimize,
-        .link_libc = true,
-    });
+    // Create the translated C module for importing pipewire headers into Zig.
+    const c = if (use_translate_c) b: {
+        const translate_c = b.dependency("translate_c", .{});
+        const translator: Translator = .init(translate_c, .{
+            .c_source_file = b.path("src/lib/c.h"),
+            .target = target,
+            .optimize = optimize,
+            .func_bodies = false,
+            .default_init = true,
+        });
+        translator.linkLibrary(libpipewire);
+        break :b translator.mod;
+    } else b: {
+        break :b b.createModule(.{
+            .root_source_file = b.path("src/lib/c.zig"),
+            .target = target,
+            .optimize = optimize,
+            .link_libc = true,
+        });
+    };
 
     // Create the zig module. Using this rather than the static library allows for easier
     // integration, and ties logging to the standard library logger.
@@ -477,8 +495,10 @@ pub fn build(b: *std.Build) void {
     });
     libpipewire_zig.addIncludePath(upstream.path("spa/include"));
 
-    // Build the video play example.
+    // // Build the video play example.
     // {
+    //     const zin = b.dependency("zin", .{}).module("zin");
+
     //     const video_play = b.addExecutable(.{
     //         .name = "video-play",
     //         .root_module = b.createModule(.{
@@ -486,35 +506,29 @@ pub fn build(b: *std.Build) void {
     //             .target = target,
     //             .optimize = optimize,
     //             .imports = &.{
+    //                 .{ .name = "zin", .module = zin },
     //             },
     //         }),
     //     });
-    //
-    //     if (b.lazyDependency("zin", .{
-    //         .target = target,
-    //         .optimize = optimize,
-    //     })) |dep| {
-    //         video_play.root_module.addImport("zin", dep.module("zin"));
-    //     }
-    //
+
     //     if (use_zig_module) {
     //         video_play.root_module.addImport("pipewire", libpipewire_zig);
     //     } else {
-    //         video_play.root_module.linkLibrary(libpipewire);
+    //         video_play.linkLibrary(libpipewire);
     //         video_play.root_module.addImport("pipewire", c);
     //     }
-    //
+
     //     video_play.root_module.addOptions("example_options", example_options);
-    //
+
     //     b.installArtifact(video_play);
-    //
+
     //     const run_step = b.step("video-play", "Run the video-play example");
-    //
+
     //     const run_cmd = b.addRunArtifact(video_play);
     //     run_step.dependOn(&run_cmd.step);
-    //
+
     //     run_cmd.step.dependOn(b.getInstallStep());
-    //
+
     //     if (b.args) |args| {
     //         run_cmd.addArgs(args);
     //     }
@@ -685,6 +699,7 @@ pub const PipewirePlugin = struct {
             .flags = flags,
         });
         lib.root_module.addIncludePath(ctx.upstream.path("spa/include"));
+        lib.root_module.addIncludePath(b.path("src/lib"));
         lib.root_module.addConfigHeader(ctx.config);
 
         namespace(lib, "spa_handle_factory_enum");

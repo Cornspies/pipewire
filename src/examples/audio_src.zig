@@ -41,8 +41,8 @@ pub fn main(init: std.process.Init) !void {
 
     // Configure our runtime log level
     const log_level_env_var = "AUDIO_SRC_LOG_LEVEL";
-    if (std.c.getenv(log_level_env_var)) |level_str_temp| {
-        const level_str = std.mem.span(level_str_temp);
+    if (std.c.getenv(log_level_env_var)) |level_str_nt| {
+        const level_str = std.mem.span(level_str_nt);
         const levels: std.StaticStringMap(std.log.Level) = .initComptime(.{
             .{ "debug", .debug },
             .{ "info", .info },

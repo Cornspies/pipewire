@@ -121,23 +121,14 @@ pub export fn __wrap_fstat(fd: std.c.fd_t, buf: *c.struct_stat) callconv(.c) c_i
     const result, const strategy = b: {
         if (fd == maybe_client_config_fd) {
             buf.* = std.mem.zeroInit(c.struct_stat, .{
-                .st_dev = 0,
-                .st_ino = 0,
                 .st_mode = std.c.S.IFREG,
-                .st_nlink = 0,
                 .st_uid = std.math.maxInt(std.os.linux.uid_t),
                 .st_gid = std.math.maxInt(std.os.linux.gid_t),
-                .st_rdev = 0,
                 .st_size = client_conf.len,
-                .st_blksize = 0,
-                .st_blocks = 0,
-                .st_atim = std.mem.zeroes(c.struct_timespec),
-                .st_mtim = std.mem.zeroes(c.struct_timespec),
-                .st_ctim = std.mem.zeroes(c.struct_timespec),
             });
             break :b .{ 0, "real" };
         } else {
-            break :b .{ c.fstat(fd, @ptrCast(buf)), "real" };
+            break :b .{ c.fstat(fd, buf), "real" };
         }
     };
     log.debug("fstat({}, {*}) -> {} (buf.* = {any}) ({s})", .{ fd, buf, result, buf.*, strategy });
