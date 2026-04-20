@@ -10,9 +10,6 @@ pub fn build(b: *std.Build) void {
     const host_target = b.resolveTargetQuery(.{});
     const host_optimize = .Debug;
 
-    // https://github.com/allyourcodebase/pipewire/issues/6
-    const use_translate_c = b.option(bool, "use_translate_c", "Use translate C.") orelse false;
-
     const rtprio_client = b.option(u8, "rtprio_client", "PipeWire clients realtime priority") orelse 83;
     if (rtprio_client < 11 or rtprio_client > 99) @panic("invalid rtprio_client");
 
@@ -456,25 +453,16 @@ pub fn build(b: *std.Build) void {
     }
 
     // Create the translated C module for importing pipewire headers into Zig.
-    const c = if (use_translate_c) b: {
-        const translate_c = b.dependency("translate_c", .{});
-        const translator: Translator = .init(translate_c, .{
-            .c_source_file = b.path("src/lib/c.h"),
-            .target = target,
-            .optimize = optimize,
-            .func_bodies = false,
-            .default_init = true,
-        });
-        translator.linkLibrary(libpipewire);
-        break :b translator.mod;
-    } else b: {
-        break :b b.createModule(.{
-            .root_source_file = b.path("src/lib/c.zig"),
-            .target = target,
-            .optimize = optimize,
-            .link_libc = true,
-        });
-    };
+    const translate_c = b.dependency("translate_c", .{});
+    const translator: Translator = .init(translate_c, .{
+        .c_source_file = b.path("src/lib/c.h"),
+        .target = target,
+        .optimize = optimize,
+        .func_bodies = false,
+        .default_init = true,
+    });
+    translator.linkLibrary(libpipewire);
+    const c = translator.mod;
 
     // Create the zig module. Using this rather than the static library allows for easier
     // integration, and ties logging to the standard library logger.
