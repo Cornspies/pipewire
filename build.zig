@@ -8,7 +8,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const host_target = b.resolveTargetQuery(.{});
-    const host_optimize = .Debug;
+    const host_optimize: std.builtin.OptimizeMode = .Debug;
 
     const rtprio_client = b.option(u8, "rtprio_client", "PipeWire clients realtime priority") orelse 83;
     if (rtprio_client < 11 or rtprio_client > 99) @panic("invalid rtprio_client");
@@ -51,6 +51,9 @@ pub fn build(b: *std.Build) void {
             .link_libc = true,
         }),
     });
+
+    var version_h: *std.Build.Step.ConfigHeader = undefined;
+    var config_h: *std.Build.Step.ConfigHeader = undefined;
 
     {
         // Add the varargs workaround
@@ -130,7 +133,7 @@ pub fn build(b: *std.Build) void {
         // Build the library configuration headers
         const pipewire_version = std.SemanticVersion.parse(build_zon.version) catch
             @panic("invalid version");
-        const version_h = b.addConfigHeader(.{
+        version_h = b.addConfigHeader(.{
             .style = .{ .cmake = upstream.path("src/pipewire/version.h.in") },
             .include_path = "pipewire/version.h",
         }, .{
@@ -140,7 +143,7 @@ pub fn build(b: *std.Build) void {
             .PIPEWIRE_API_VERSION = build_zon.api_version,
         });
 
-        const config_h = b.addConfigHeader(.{
+        config_h = b.addConfigHeader(.{
             .style = .blank,
             .include_path = "config.h",
         }, .{
@@ -452,8 +455,17 @@ pub fn build(b: *std.Build) void {
         b.installArtifact(libpipewire);
     }
 
-    // Create the translated C module for importing pipewire headers into Zig.
     const translate_c = b.dependency("translate_c", .{});
+
+    const wrap_translator: Translator = .init(translate_c, .{
+        .name = "wrap_c",
+        .c_source_file = b.path("src/wrap/wrap_c.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+    wrap_translator.addIncludePath(upstream.path("spa/include"));
+    libpipewire.root_module.addImport("wrap_c", wrap_translator.mod);
+
     const translator: Translator = .init(translate_c, .{
         .c_source_file = b.path("src/lib/c.h"),
         .target = target,
@@ -461,8 +473,11 @@ pub fn build(b: *std.Build) void {
         .func_bodies = false,
         .default_init = true,
     });
-    translator.linkLibrary(libpipewire);
     const c = translator.mod;
+    translator.addIncludePath(upstream.path("spa/include"));
+    translator.addIncludePath(upstream.path("src"));
+    translator.addConfigHeader(version_h);
+    translator.addConfigHeader(config_h);
 
     // Create the zig module. Using this rather than the static library allows for easier
     // integration, and ties logging to the standard library logger.
@@ -551,9 +566,7 @@ pub fn build(b: *std.Build) void {
 
         run_cmd.step.dependOn(b.getInstallStep());
 
-        if (b.args) |args| {
-            run_cmd.addArgs(args);
-        }
+        run_cmd.addPassthruArgs();
     }
 }
 
